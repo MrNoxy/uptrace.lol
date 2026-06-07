@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UpTrace · Dashboard</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Kode+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-color: #0e0c0c;
+            --bg-elevated: #141111;
+            --card-bg: #161313;
+            --card-bg-hover: #1b1717;
+            --text-primary: #f5f3f3;
+            --text-secondary: #8c8585;
+            --text-muted: #5c5757;
+            --accent-red: #e66e6e;
+            --accent-red-bright: #ff6b6b;
+            --accent-blue: #0099ff;
+            --green: #3ecf8e;
+            --amber: #f5b14c;
+            --input-bg: rgba(255, 255, 255, 0.04);
+            --input-border: rgba(255, 255, 255, 0.07);
+            --hairline: rgba(255, 255, 255, 0.06);
+            --radius: 14px;
+            --radius-sm: 9px;
+            --font-head: "Kode Mono", monospace;
+            --font-body: "Inter", sans-serif;
+            --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+
+        ::selection { background: rgba(230, 110, 110, 0.3); color: #fff; }
+
+        html { background: var(--bg-color); }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 14px;
+            min-height: 100vh;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Subtle grain / noise via fixed overlay (no gradients abused) */
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image:
+                radial-gradient(circle at 15% 10%, rgba(230, 110, 110, 0.08), transparent 38%),
+                radial-gradient(circle at 85% 90%, rgba(0, 153, 255, 0.06), transparent 40%);
+            z-index: -2;
+            pointer-events: none;
+        }
+
+        /* faint dotted grid */
+        body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image: radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px);
+            background-size: 26px 26px;
+            z-index: -1;
+            pointer-events: none;
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent 70%);
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent 70%);
+        }
+
+        .ambient-glow {
+            position: fixed;
+            width: 520px;
+            height: 520px;
+            border-radius: 50%;
+            background: radial-gradient(50% 50%, rgba(230, 70, 70, 0.12) 0%, rgba(138, 0, 0, 0) 100%);
+            filter: blur(90px);
+            z-index: -1;
+            pointer-events: none;
+            animation: float 18s ease-in-out infinite;
+        }
+        .glow-1 { top: -180px; left: -160px; }
+        .glow-2 { bottom: -200px; right: -180px; background: radial-gradient(50% 50%, rgba(0, 120, 200, 0.10) 0%, transparent 100%); animation-delay: -6s; }
+        .glow-3 { top: 45%; left: 35%; width: 320px; height: 320px; opacity: 0.6; animation-delay: -11s; }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(40px, -30px) scale(1.08); }
+            66% { transform: translate(-30px, 25px) scale(0.95); }
+        }
+
+        /* --- Typography --- */
+        h1, h2, h3 { font-family: var(--font-head); font-weight: 500; margin: 0; letter-spacing: -0.02em; }
+        h1 { font-size: 22px; }
+        h2 { font-size: 17px; margin-bottom: 4px; color: #fff; }
+        h3 { font-size: 15px; }
+        .sub-text { color: var(--text-secondary); font-weight: 300; font-size: 13px; line-height: 1.5; margin: 4px 0 0; }
+        code {
+            font-family: var(--font-head);
+            background: rgba(0, 153, 255, 0.08);
+            border: 1px solid rgba(0, 153, 255, 0.15);
+            padding: 3px 7px;
+            border-radius: 6px;
+            color: #5cc0ff;
+            font-size: 12px;
+        }
+
+        /* --- Layout --- */
+        .layout-container {
+            display: flex;
+            min-height: 100vh;
+            max-width: 1340px;
+            margin: 0 auto;
+            padding: 22px;
+            gap: 22px;
+        }
+
+        .sidebar {
+            width: 264px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            position: sticky;
+            top: 22px;
+            align-self: flex-start;
+            height: calc(100vh - 44px);
+        }
+
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            min-width: 0;
+        }
+
+        @media (max-width: 920px) {
+            .layout-container { flex-direction: column; padding: 14px; }
+            .sidebar { width: 100%; position: static; height: auto; }
+        }
+
+        /* --- Cards --- */
+        .card {
+            background-color: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 26px;
+            border: 1px solid var(--hairline);
+            position: relative;
+            transition: border-color 0.3s var(--ease), transform 0.3s var(--ease);
+        }
+        .card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(140deg, rgba(255,255,255,0.08), transparent 40%);
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        /* entrance reveal */
+        .reveal { opacity: 0; transform: translateY(14px); animation: revealIn 0.6s var(--ease) forwards; }
+        @keyframes revealIn { to { opacity: 1; transform: translateY(0); } }
+
+        /* --- Brand mark --- */
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .brand-dot {
+            width: 11px; height: 11px; border-radius: 50%;
+            background: var(--accent-red-bright);
+            box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.5);
+            animation: pulseDot 2.4s infinite;
+        }
+        @keyframes pulseDot {
+            0% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.45); }
+            70% { box-shadow: 0 0 0 9px rgba(255, 107, 107, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); }
+        }
+        .brand h1 { font-size: 19px; color: #fff; }
+        .brand h1 b { color: var(--accent-red); font-weight: 700; }
+
+        /* --- Sidebar menu --- */
+        .menu-btn {
+            background-color: transparent;
+            color: var(--text-secondary);
+            border: 1px solid transparent;
+            padding: 11px 13px;
+            border-radius: var(--radius-sm);
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.22s var(--ease);
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            position: relative;
+            overflow: hidden;
+        }
+        .menu-btn .ic { width: 17px; height: 17px; flex-shrink: 0; stroke: currentColor; }
+        .menu-btn:hover { background: rgba(255,255,255,0.035); color: #fff; transform: translateX(2px); }
+        .menu-btn.active {
+            background: rgba(230, 110, 110, 0.1);
+            color: var(--accent-red);
+            border-color: rgba(230, 110, 110, 0.18);
+        }
+        .menu-btn.active::before {
+            content: "";
+            position: absolute;
+            left: 0; top: 50%;
+            transform: translateY(-50%);
+            width: 3px; height: 16px;
+            background: var(--accent-red);
+            border-radius: 0 3px 3px 0;
+        }
+
+        /* --- Labels & inputs --- */
+        label {
+            display: block;
+            color: var(--text-secondary);
+            font-size: 11px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            margin-top: 16px;
+            font-weight: 500;
+        }
+        .card > label:first-of-type, .grid-3 label { margin-top: 0; }
+
+        input, select, textarea {
+            width: 100%;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            color: var(--text-primary);
+            padding: 12px 13px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-body);
+            font-size: 14px;
+            transition: all 0.2s var(--ease);
+        }
+        input:hover, select:hover, textarea:hover { border-color: rgba(255,255,255,0.14); }
+        input:focus, select:focus, textarea:focus {
+            border-color: var(--accent-blue);
+            background: rgba(0, 153, 255, 0.05);
+            box-shadow: 0 0 0 3px rgba(0, 153, 255, 0.1);
+        }
+        input::placeholder, textarea::placeholder { color: var(--text-muted); }
+        select { -webkit-appearance: none; cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238c8585' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 13px center; padding-right: 34px;
+        }
+        textarea { resize: vertical; min-height: 80px; line-height: 1.55; }
+
+        /* custom checkbox */
+        .check-row { display: flex; align-items: center; gap: 11px; color: var(--text-secondary); cursor: pointer; user-select: none; }
+        .check-row input[type=checkbox] { display: none; }
+        .check-box {
+            width: 42px; height: 24px; border-radius: 20px; background: var(--input-bg);
+            border: 1px solid var(--input-border); position: relative; transition: all 0.25s var(--ease); flex-shrink: 0;
+        }
+        .check-box::after {
+            content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+            border-radius: 50%; background: var(--text-muted); transition: all 0.25s var(--ease);
+        }
+        .check-row input:checked + .check-box { background: rgba(62, 207, 142, 0.25); border-color: rgba(62, 207, 142, 0.4); }
+        .check-row input:checked + .check-box::after { left: 20px; background: var(--green); }
+
+        /* --- Buttons --- */
+        .btn-primary, .btn-danger, .btn-ghost {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            gap: 7px;
+            padding: 10px 18px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            cursor: pointer;
+            border: 1px solid rgba(230, 110, 110, 0.18);
+            background: rgba(230, 110, 110, 0.08);
+            color: #fff;
+            transition: all 0.2s var(--ease);
+            font-weight: 600;
+            font-family: var(--font-body);
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-primary:hover {
+            background: rgba(230, 110, 110, 0.18);
+            border-color: rgba(230, 110, 110, 0.35);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(230, 70, 70, 0.15);
+        }
+        .btn-primary:active, .btn-danger:active, .btn-ghost:active { transform: translateY(0) scale(0.98); }
+
+        .btn-danger {
+            border-color: rgba(255, 80, 80, 0.22);
+            background: rgba(255, 60, 60, 0.07);
+            color: #ff9c9c;
+        }
+        .btn-danger:hover { background: rgba(255, 60, 60, 0.16); border-color: rgba(255,80,80,0.4); transform: translateY(-1px); }
+
+        .btn-ghost { background: transparent; border-color: var(--hairline); color: var(--text-secondary); }
+        .btn-ghost:hover { color: #fff; border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.03); }
+
+        /* ripple */
+        .ripple { position: absolute; border-radius: 50%; transform: scale(0); background: rgba(255,255,255,0.25); animation: ripple 0.6s linear; pointer-events: none; }
+        @keyframes ripple { to { transform: scale(2.6); opacity: 0; } }
+
+        .btn-row { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+
+        /* --- Auth Screen --- */
+        #authShell {
+            display: none;
+            min-height: 100vh;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        #authCard {
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            padding: 38px 32px;
+        }
+        #authCard .brand { justify-content: center; margin-bottom: 6px; }
+        .auth-tag {
+            font-family: var(--font-head); font-size: 11px; letter-spacing: 0.18em;
+            text-transform: uppercase; color: var(--accent-red); margin-bottom: 18px;
+        }
+
+        /* --- Section header --- */
+        .sec-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 20px; }
+        .sec-title { display: flex; align-items: center; gap: 10px; }
+        .sec-icon {
+            width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+            display: grid; place-items: center;
+            background: rgba(230, 110, 110, 0.1); border: 1px solid rgba(230,110,110,0.18);
+        }
+        .sec-icon svg { width: 17px; height: 17px; stroke: var(--accent-red); }
+
+        /* --- Service Items --- */
+        .service-item {
+            background: rgba(255,255,255,0.018);
+            border: 1px solid var(--hairline);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 14px;
+            transition: all 0.3s var(--ease);
+            animation: revealIn 0.5s var(--ease) both;
+        }
+        .service-item:hover { border-color: rgba(255,255,255,0.12); background: rgba(255,255,255,0.028); }
+        .service-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--hairline);
+            padding-bottom: 15px;
+            margin-bottom: 16px;
+            gap: 10px;
+        }
+        .service-name { font-weight: 700; font-size: 16px; color: #fff; display: flex; align-items: center; gap: 9px; }
+        .svc-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px rgba(62,207,142,0.6); flex-shrink: 0; }
+
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+        @media(max-width: 760px) { .grid-3 { grid-template-columns: 1fr; } }
+
+        /* --- Toast --- */
+        #toast {
+            position: fixed;
+            bottom: 26px;
+            left: 50%;
+            transform: translateX(-50%) translateY(28px);
+            background: rgba(22, 19, 19, 0.92);
+            backdrop-filter: blur(14px);
+            border: 1px solid var(--hairline);
+            color: #fff;
+            padding: 13px 20px 13px 16px;
+            border-radius: 12px;
+            opacity: 0;
+            transition: all 0.4s var(--ease);
+            z-index: 2000;
+            font-size: 13px;
+            display: flex; align-items: center; gap: 10px;
+            box-shadow: 0 18px 50px rgba(0,0,0,0.6);
+            max-width: 90vw;
+            pointer-events: none;
+        }
+        #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        #toast .toast-bar { width: 3px; height: 22px; border-radius: 3px; background: var(--accent-blue); flex-shrink: 0; }
+        #toast.err .toast-bar { background: var(--accent-red); }
+        #toast.ok .toast-bar { background: var(--green); }
+
+        .separator { height: 1px; background: var(--hairline); width: 100%; margin: 24px 0; }
+
+        .badge {
+            background: rgba(0, 153, 255, 0.09);
+            border: 1px solid rgba(0,153,255,0.16);
+            color: #5cc0ff;
+            padding: 5px 9px;
+            border-radius: 7px;
+            font-size: 11px;
+            font-family: var(--font-head);
+            display: inline-block;
+            margin-top: 12px;
+            word-break: break-all;
+        }
+
+        /* --- Project dropdown --- */
+        .project-dropdown { position: relative; width: 100%; }
+        .project-selected {
+            width: 100%; background: var(--input-bg); border: 1px solid var(--input-border);
+            color: var(--text-primary); padding: 12px 13px; border-radius: var(--radius-sm);
+            font-size: 14px; transition: all 0.2s var(--ease); cursor: pointer; user-select: none;
+            display: flex; justify-content: space-between; align-items: center; gap: 8px;
+        }
+        .project-selected::after {
+            content: ""; width: 8px; height: 8px; border-right: 2px solid var(--text-secondary);
+            border-bottom: 2px solid var(--text-secondary); transform: rotate(45deg); transition: transform 0.25s var(--ease); flex-shrink: 0;
+        }
+        .project-dropdown.open .project-selected::after { transform: rotate(-135deg); }
+        .project-selected:hover { border-color: var(--accent-blue); }
+        .project-menu {
+            position: absolute; top: calc(100% + 8px); left: 0; right: 0;
+            background: var(--bg-elevated); border: 1px solid var(--hairline);
+            border-radius: var(--radius-sm); overflow: hidden; display: none; z-index: 50;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+            animation: dropIn 0.2s var(--ease);
+        }
+        @keyframes dropIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+        .project-item { padding: 12px 13px; cursor: pointer; font-size: 13px; color: #fff; transition: background 0.15s; }
+        .project-item:hover { background: rgba(230, 110, 110, 0.08); }
+
+        /* --- View transition --- */
+        .view { animation: viewIn 0.45s var(--ease); }
+        @keyframes viewIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ============ SLIDE TO CONFIRM (iPhone power-off vibe) ============ */
+        .slide-overlay {
+            position: fixed; inset: 0; z-index: 3000;
+            background: rgba(8, 6, 6, 0.72);
+            backdrop-filter: blur(8px);
+            display: none; align-items: center; justify-content: center; padding: 22px;
+            opacity: 0; transition: opacity 0.3s var(--ease);
+        }
+        .slide-overlay.show { display: flex; opacity: 1; }
+        .slide-modal {
+            background: var(--card-bg); border: 1px solid var(--hairline);
+            border-radius: 20px; padding: 30px 26px; max-width: 400px; width: 100%;
+            text-align: center; box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+            transform: scale(0.92) translateY(10px); transition: transform 0.35s var(--ease);
+        }
+        .slide-overlay.show .slide-modal { transform: scale(1) translateY(0); }
+        .slide-modal .warn-ic {
+            width: 52px; height: 52px; margin: 0 auto 16px; border-radius: 14px; display: grid; place-items: center;
+            background: rgba(255, 60, 60, 0.1); border: 1px solid rgba(255,60,60,0.25);
+        }
+        .slide-modal .warn-ic svg { width: 26px; height: 26px; stroke: var(--accent-red-bright); }
+        .slide-modal h3 { color: #fff; font-size: 18px; margin-bottom: 8px; }
+        .slide-modal p { color: var(--text-secondary); font-size: 13px; line-height: 1.55; margin: 0 0 24px; }
+
+        .slide-track {
+            position: relative; height: 58px; border-radius: 30px;
+            background: rgba(255,255,255,0.04); border: 1px solid var(--hairline);
+            overflow: hidden; user-select: none; touch-action: none;
+        }
+        .slide-fill {
+            position: absolute; inset: 0; width: 58px;
+            background: linear-gradient(90deg, rgba(255,60,60,0.25), rgba(255,60,60,0.12));
+            transition: width 0.05s linear; pointer-events: none;
+        }
+        .slide-label {
+            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            font-family: var(--font-head); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase;
+            color: var(--text-secondary); padding-left: 40px; pointer-events: none;
+            background: linear-gradient(90deg, var(--text-muted) 0%, #fff 50%, var(--text-muted) 100%);
+            background-size: 220% 100%; -webkit-background-clip: text; background-clip: text;
+            -webkit-text-fill-color: transparent; animation: shimmer 2.6s linear infinite;
+        }
+        @keyframes shimmer { to { background-position: -220% 0; } }
+        .slide-knob {
+            position: absolute; top: 3px; left: 3px; width: 52px; height: 52px;
+            border-radius: 50%; background: var(--accent-red-bright);
+            display: grid; place-items: center; cursor: grab;
+            box-shadow: 0 4px 14px rgba(255, 60, 60, 0.4);
+            transition: box-shadow 0.2s;
+            z-index: 2;
+        }
+        .slide-knob:active { cursor: grabbing; }
+        .slide-knob svg { width: 22px; height: 22px; stroke: #fff; }
+        .slide-cancel { margin-top: 16px; color: var(--text-secondary); background: none; border: none; cursor: pointer; font-size: 13px; font-family: var(--font-body); }
+        .slide-cancel:hover { color: #fff; }
+
+        /* misc helpers */
+        .row-between { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .stat-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-family: var(--font-head); color: var(--text-secondary); }
+        .dot-sm { width: 7px; height: 7px; border-radius: 50%; }
+        .dot-green { background: var(--green); box-shadow: 0 0 6px rgba(62,207,142,0.6); }
+        .danger-zone { border-color: rgba(255,60,60,0.12) !important; }
+    </style>
+</head>
+<body>
+
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+    <div class="ambient-glow glow-3"></div>
+
+    <div id="toast"><span class="toast-bar"></span><span id="toastMsg">Action Successful</span></div>
+
+    <!-- ===== AUTH ===== -->
+    <div id="authShell">
+        <div id="authCard" class="card reveal">
+            <div class="brand"><span class="brand-dot"></span><h1>Up<b>Trace</b></h1></div>
+            <div class="auth-tag">Monitor Everything · Pay Nothing</div>
+
+            <div style="text-align:left;">
+                <label>Email</label>
+                <input id="email" type="email" placeholder="you@example.com" autocomplete="email">
+                <label>Password</label>
+                <input id="password" type="password" placeholder="••••••••" autocomplete="current-password">
+            </div>
+
+            <div class="btn-row" style="justify-content:center; margin-top:24px;">
+                <button class="btn-primary" id="btnLogin" style="flex:1;">Login</button>
+                <button class="btn-ghost" id="btnRegister" style="flex:1;">Register</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== APP ===== -->
+    <div id="app" class="layout-container" style="display:none;">
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="card reveal" style="padding:20px;">
+                <div class="brand"><span class="brand-dot"></span><h1>Up<b>Trace</b></h1></div>
+                <div class="badge" id="userEmail">Loading…</div>
+
+                <div class="separator" style="margin:16px 0;"></div>
+
+                <label style="margin-top:0;">Current Project</label>
+                <div class="project-dropdown" id="projectDropdown" style="margin-bottom:12px;">
+                    <div class="project-selected" id="projectSelected">Select project</div>
+                    <div class="project-menu" id="projectMenu"></div>
+                </div>
+
+                <button id="btnCreateProject" class="btn-ghost" style="width:100%;">
+                    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                    New Project
+                </button>
+
+                <button id="btnDeleteProject" class="btn-danger" style="width:100%; margin-top:10px; display:none;">
+                    Delete Project
+                </button>
+            </div>
+
+            <nav class="card reveal" style="padding:12px; display:flex; flex-direction:column; gap:4px; flex-grow:1;">
+                <button class="menu-btn active" id="btnNavDashboard">
+                    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+                    Dashboard
+                </button>
+                <button class="menu-btn" id="btnAccount">
+                    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0114 0v1"/></svg>
+                    Manage Account
+                </button>
+                <a href="https://discord.gg/r5SyNyCYjb" target="_blank" class="menu-btn">
+                    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 4a16 16 0 014 11 16 16 0 01-5 2l-1-2M6 4a16 16 0 00-4 11 16 16 0 005 2l1-2"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/></svg>
+                    Discord Community
+                </a>
+                <div style="flex-grow:1;"></div>
+                <button class="menu-btn" id="btnLogout" style="color:var(--accent-red);">
+                    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
+                    Logout
+                </button>
+            </nav>
+        </aside>
+
+        <!-- MAIN -->
+        <main class="main-content">
+
+            <!-- ACCOUNT -->
+            <section id="accountCard" class="card view" style="display:none;">
+                <div class="sec-head">
+                    <div class="sec-title">
+                        <div class="sec-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0114 0v1"/></svg></div>
+                        <div><h2>Account Settings</h2><p class="sub-text">Manage your identity & security.</p></div>
+                    </div>
+                </div>
+
+                <div class="grid-3">
+                    <div>
+                        <label>UID</label>
+                        <code id="userUid" style="display:block; margin-top:4px;">…</code>
+                    </div>
+                    <div>
+                        <label>Verified</label>
+                        <code id="emailVerified">…</code>
+                    </div>
+                    <div>
+                        <label>Plan</label>
+                        <code style="color:var(--green); border-color:rgba(62,207,142,0.2); background:rgba(62,207,142,0.08);">Free Forever</code>
+                    </div>
+                </div>
+
+                <div class="separator"></div>
+
+                <div class="grid-3">
+                    <div>
+                        <label>Username</label>
+                        <input id="username" type="text" placeholder="username">
+                        <button class="btn-primary" id="btnSaveUsername" style="margin-top:10px; width:100%">Save</button>
+                    </div>
+                    <div>
+                        <label>Change Email</label>
+                        <input id="newEmail" type="email" placeholder="new@email.com">
+                        <button id="btnChangeEmail" class="btn-primary" style="margin-top:10px; width:100%">Update</button>
+                    </div>
+                    <div>
+                        <label>Change Password</label>
+                        <input id="newPassword" type="password" placeholder="New Password">
+                        <button id="btnChangePassword" class="btn-primary" style="margin-top:10px; width:100%">Update</button>
+                    </div>
+                </div>
+
+                <div class="separator"></div>
+
+                <div class="card danger-zone" style="padding:18px; background:rgba(255,60,60,0.02);">
+                    <div class="row-between">
+                        <div>
+                            <div style="color:#fff; font-weight:600;">Data & Privacy</div>
+                            <div class="sub-text">Export your data, or permanently remove your account.</div>
+                        </div>
+                        <div style="display:flex; gap:10px;">
+                            <button id="btnExportData" class="btn-ghost">Export JSON</button>
+                            <button id="btnDeleteAccount" class="btn-danger">Delete Account</button>
+                            <button id="btnRequestDeletion" style="display:none"></button>
+                            <button id="btnSendVerify" style="display:none"></button>
+                            <button id="btnRefreshUser" style="display:none"></button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- DASHBOARD -->
+            <div id="dashboardView" class="view">
+
+                <section class="card">
+                    <div class="sec-head">
+                        <div class="sec-title">
+                            <div class="sec-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-2.7 1.1V21a2 2 0 11-4 0v-.1a1.6 1.6 0 00-2.7-1.1l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00-1.1-2.7H3a2 2 0 110-4h.1a1.6 1.6 0 001.1-2.7l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3 1.6 1.6 0 001-1.5V3a2 2 0 014 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8 1.6 1.6 0 001.5 1H21a2 2 0 010 4h-.1a1.6 1.6 0 00-1.5 1z"/></svg></div>
+                            <div><h2>Project Settings</h2><p class="sub-text">Configure your public status page.</p></div>
+                        </div>
+                        <button id="btnOpenPublic" class="btn-primary">View Public Page ↗</button>
+                    </div>
+
+                    <div class="grid-3">
+                        <div>
+                            <label>Project Name</label>
+                            <input id="projectName" type="text" placeholder="My App Status">
+                        </div>
+                        <div>
+                            <label>Slug (URL)</label>
+                            <input id="projectSlug" type="text" placeholder="my-app">
+                        </div>
+                        <div>
+                            <label>Visibility</label>
+                            <label class="check-row" style="margin-top:12px; text-transform:none; letter-spacing:0; font-size:13px;">
+                                <input id="projectPublic" type="checkbox">
+                                <span class="check-box"></span>
+                                <span>Publicly Visible</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="btn-row">
+                        <button id="btnSaveProject" class="btn-primary">Save Settings</button>
+                    </div>
+                    <p class="sub-text" style="margin-top:14px;">Public URL: https://uptrace.lol/status.html?project=<span id="slugPreview" style="color:#5cc0ff;">…</span></p>
+                </section>
+
+                <section class="card">
+                    <div class="sec-title" style="margin-bottom:16px;">
+                        <div class="sec-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 11-5.8-1.6"/></svg></div>
+                        <div><h2>Announcement</h2><p class="sub-text">Shown at the top of your public status page.</p></div>
+                    </div>
+                    <textarea id="announcement" placeholder="e.g. Scheduled maintenance this Sunday…" rows="3"></textarea>
+                    <div class="btn-row">
+                        <button id="btnSaveAnnouncement" class="btn-primary">Update Announcement</button>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <div class="sec-title" style="margin-bottom:18px;">
+                        <div class="sec-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+                        <div><h2>Services & Monitors</h2><p class="sub-text">Track each part of your stack.</p></div>
+                    </div>
+
+                    <div style="background:rgba(255,255,255,0.025); padding:16px; border-radius:var(--radius); margin-bottom:20px; border:1px solid var(--hairline);">
+                        <div class="grid-3" style="align-items:end;">
+                            <div style="grid-column:span 2;">
+                                <label>New Service Name</label>
+                                <input id="newServiceName" type="text" placeholder="e.g. API Server, Database, Website">
+                            </div>
+                            <div style="display:none"><input id="newServiceOrder" value="0"></div>
+                            <button id="btnAddService" class="btn-primary" style="height:44px;">+ Add Service</button>
+                        </div>
+                    </div>
+
+                    <div id="services"></div>
+                </section>
+
+                <section class="card danger-zone">
+                    <h3 style="color:var(--text-secondary);">Legacy Data</h3>
+                    <p class="sub-text">Import statusApps from root DB (one-time action).</p>
+                    <button id="btnImportLegacy" class="btn-ghost" style="margin-top:14px;">Run Import</button>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- ===== SLIDE TO CONFIRM ===== -->
+    <div class="slide-overlay" id="slideOverlay">
+        <div class="slide-modal">
+            <div class="warn-ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+            <h3 id="slideTitle">Are you sure?</h3>
+            <p id="slideDesc">This action cannot be undone.</p>
+            <div class="slide-track" id="slideTrack">
+                <div class="slide-fill" id="slideFill"></div>
+                <div class="slide-label" id="slideLabel">slide to confirm</div>
+                <div class="slide-knob" id="slideKnob">
+                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                </div>
+            </div>
+            <button class="slide-cancel" id="slideCancel">Cancel</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { auth, db } from "./firebase.js";
+        import {
+          createUserWithEmailAndPassword,
+          signInWithEmailAndPassword,
+          onAuthStateChanged,
+          signOut,
+          sendEmailVerification,
+          updateEmail,
+          updatePassword,
+          deleteUser,
+          EmailAuthProvider,
+          reauthenticateWithCredential,
+          verifyBeforeUpdateEmail
+        } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+        import {
+          ref, get, set, update, push, remove, onValue, child
+        } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+
+        const $ = (q)=>document.querySelector(q);
+
+        function toast(msg, type){
+          const el = $("#toast");
+          $("#toastMsg").textContent = msg;
+          el.classList.remove("ok","err");
+          if(type) el.classList.add(type);
+          el.classList.add("show");
+          clearTimeout(el._t);
+          el._t = setTimeout(()=>el.classList.remove("show"), 2600);
+        }
+
+        /* ----- Button ripple effect ----- */
+        document.addEventListener("click", (e)=>{
+          const btn = e.target.closest(".btn-primary,.btn-danger,.btn-ghost");
+          if(!btn) return;
+          const r = document.createElement("span");
+          r.className = "ripple";
+          const rect = btn.getBoundingClientRect();
+          const size = Math.max(rect.width, rect.height);
+          r.style.width = r.style.height = size + "px";
+          r.style.left = (e.clientX - rect.left - size/2) + "px";
+          r.style.top = (e.clientY - rect.top - size/2) + "px";
+          btn.appendChild(r);
+          setTimeout(()=>r.remove(), 600);
+        });
+
+        /* ============ SLIDE TO CONFIRM ============ */
+        const slideOverlay = $("#slideOverlay");
+        const slideTrack = $("#slideTrack");
+        const slideKnob = $("#slideKnob");
+        const slideFill = $("#slideFill");
+        let slideResolve = null;
+
+        function slideConfirm({ title = "Are you sure?", desc = "This action cannot be undone." } = {}){
+          $("#slideTitle").textContent = title;
+          $("#slideDesc").textContent = desc;
+          resetKnob();
+          slideOverlay.classList.add("show");
+          return new Promise(res => { slideResolve = res; });
+        }
+        function resetKnob(){
+          slideKnob.style.transition = "left 0.3s cubic-bezier(0.22,1,0.36,1)";
+          slideKnob.style.left = "3px";
+          slideFill.style.width = "58px";
+        }
+        function closeSlide(result){
+          slideOverlay.classList.remove("show");
+          if(slideResolve){ slideResolve(result); slideResolve = null; }
+        }
+        $("#slideCancel").addEventListener("click", ()=>closeSlide(false));
+        slideOverlay.addEventListener("click", (e)=>{ if(e.target === slideOverlay) closeSlide(false); });
+
+        let dragging = false, startX = 0, knobStart = 3;
+        function maxTravel(){ return slideTrack.clientWidth - slideKnob.clientWidth - 6; }
+
+        function startDrag(clientX){
+          dragging = true;
+          startX = clientX;
+          knobStart = parseFloat(slideKnob.style.left) || 3;
+          slideKnob.style.transition = "none";
+        }
+        function moveDrag(clientX){
+          if(!dragging) return;
+          let pos = knobStart + (clientX - startX);
+          pos = Math.max(3, Math.min(pos, maxTravel() + 3));
+          slideKnob.style.left = pos + "px";
+          slideFill.style.width = (pos + 55) + "px";
+        }
+        function endDrag(){
+          if(!dragging) return;
+          dragging = false;
+          const pos = parseFloat(slideKnob.style.left) || 3;
+          if(pos >= maxTravel() - 4){
+            slideKnob.style.transition = "left 0.15s ease";
+            slideKnob.style.left = (maxTravel() + 3) + "px";
+            navigator.vibrate?.(40);
+            setTimeout(()=>closeSlide(true), 150);
+          } else {
+            resetKnob();
+          }
+        }
+        slideKnob.addEventListener("mousedown", e=>{ e.preventDefault(); startDrag(e.clientX); });
+        window.addEventListener("mousemove", e=>moveDrag(e.clientX));
+        window.addEventListener("mouseup", endDrag);
+        slideKnob.addEventListener("touchstart", e=>startDrag(e.touches[0].clientX), {passive:true});
+        window.addEventListener("touchmove", e=>{ if(dragging){ moveDrag(e.touches[0].clientX); } }, {passive:true});
+        window.addEventListener("touchend", endDrag);
+
+        function slugify(s){
+          return String(s||"").toLowerCase().trim()
+            .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40);
+        }
+        function now(){ return Date.now(); }
+
+        let currentUid = null;
+        let currentProjectId = null;
+        let currentRole = null;
+        let servicesUnsub = null;
+        let projectUnsub = null;
+
+        async function getRole(projectId, uid){
+          const snap = await get(ref(db, `projectMembers/${projectId}/${uid}/role`));
+          return snap.val() || null;
+        }
+        function requireProject(){
+          if(!currentProjectId) throw new Error("Pick a project first.");
+        }
+
+        /* ---------------- ACCOUNT HELPERS ---------------- */
+        async function promptReauth(user){
+          if(!user?.email) throw new Error("Re-auth requires an email/password account.");
+          const pass = prompt("For security, re-enter your current password:");
+          if(!pass) throw new Error("Re-auth cancelled");
+          const cred = EmailAuthProvider.credential(user.email, pass);
+          await reauthenticateWithCredential(user, cred);
+        }
+        function downloadJson(filename, obj){
+          const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = filename;
+          document.body.appendChild(a); a.click(); a.remove();
+          URL.revokeObjectURL(url);
+        }
+
+        /* ---------------- AUTH UI ---------------- */
+        $("#btnRegister").addEventListener("click", async ()=>{
+          const email = $("#email").value.trim();
+          const pass  = $("#password").value;
+          if(!email || pass.length<6){ toast("Email + password (6+ chars)", "err"); return; }
+          try{ await createUserWithEmailAndPassword(auth, email, pass); toast("Registered!", "ok"); }
+          catch(e){ toast(e.message, "err"); }
+        });
+        $("#btnLogin").addEventListener("click", async ()=>{
+          const email = $("#email").value.trim();
+          const pass  = $("#password").value;
+          if(!email || !pass){ toast("Enter email + password", "err"); return; }
+          try{ await signInWithEmailAndPassword(auth, email, pass); toast("Logged in!", "ok"); }
+          catch(e){ toast(e.message, "err"); }
+        });
+        $("#password").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#btnLogin").click(); });
+
+        // Tab Switching
+        const navDashboard = $("#btnNavDashboard");
+        const navAccount = $("#btnAccount");
+        const accountCard = $("#accountCard");
+        const dashboardView = $("#dashboardView");
+
+        function showDashboard() {
+            accountCard.style.display = "none";
+            dashboardView.style.display = "block";
+            dashboardView.classList.remove("view"); void dashboardView.offsetWidth; dashboardView.classList.add("view");
+            navDashboard.classList.add("active");
+            navAccount.classList.remove("active");
+        }
+        function showAccount() {
+            accountCard.style.display = "block";
+            dashboardView.style.display = "none";
+            accountCard.classList.remove("view"); void accountCard.offsetWidth; accountCard.classList.add("view");
+            navDashboard.classList.remove("active");
+            navAccount.classList.add("active");
+        }
+        navDashboard.addEventListener("click", showDashboard);
+        navAccount.addEventListener("click", showAccount);
+
+        $("#btnLogout").addEventListener("click", async ()=>{ await signOut(auth); });
+
+        onAuthStateChanged(auth, async (user)=>{
+          if(!user){
+            currentUid = null; currentProjectId = null; currentRole = null;
+            $("#authShell").style.display = "flex";
+            $("#app").style.display = "none";
+            return;
+          }
+          currentUid = user.uid;
+          $("#userEmail").textContent = user.email || user.uid;
+          $("#userUid").textContent = user.uid;
+          $("#emailVerified").textContent = user.emailVerified ? "Verified" : "Unverified";
+          try{
+            const profSnap = await get(ref(db, `users/${user.uid}/profile`));
+            const prof = profSnap.val() || {};
+            $("#username").value = prof.username || "";
+            if(!prof.createdAt){ await update(ref(db, `users/${user.uid}/profile`), { createdAt: now() }); }
+          }catch(_){}
+          $("#authShell").style.display = "none";
+          $("#app").style.display = "flex";
+          showDashboard();
+          await loadProjects();
+        });
+
+        /* ---------------- ACCOUNT ACTIONS ---------------- */
+        $("#btnRefreshUser").addEventListener("click", async ()=>{
+          const user = auth.currentUser; if(!user) return;
+          try{
+            await user.reload();
+            $("#userEmail").textContent = user.email || user.uid;
+            $("#userUid").textContent = user.uid;
+            $("#emailVerified").textContent = user.emailVerified ? "Verified" : "Unverified";
+            toast("Refreshed", "ok");
+          }catch(e){ toast(e.message, "err"); }
+        });
+        $("#btnSendVerify").addEventListener("click", async ()=>{
+          const user = auth.currentUser; if(!user) return;
+          try{ await sendEmailVerification(user); toast("Verification email sent", "ok"); }
+          catch(e){ toast(e.message, "err"); }
+        });
+        $("#btnSaveUsername").addEventListener("click", async ()=>{
+          const user = auth.currentUser; if(!user) return;
+          const username = ($("#username").value || "").trim();
+          if(username.length > 24){ toast("Username max 24 chars", "err"); return; }
+          if(username && !/^[a-zA-Z0-9_.-]{3,24}$/.test(username)){ toast("Use 3-24 chars: letters, numbers, _ . -", "err"); return; }
+          try{ await update(ref(db, `users/${user.uid}/profile`), { username }); toast("Username saved", "ok"); }
+          catch(e){ toast(e.message, "err"); }
+        });
+        $("#btnChangeEmail").addEventListener("click", async ()=>{
+          const user = auth.currentUser; if(!user) return;
+          const newEmail = ($("#newEmail").value || "").trim();
+          if(!newEmail){ toast("Enter new email", "err"); return; }
+          try{
+            await verifyBeforeUpdateEmail(user, newEmail);
+            toast("Check your NEW email to confirm", "ok"); $("#newEmail").value = "";
+          }catch(e){
+            if(String(e.code||"").includes("requires-recent-login")){
+              try{ await promptReauth(user); await verifyBeforeUpdateEmail(user, newEmail); toast("Check your NEW email to confirm", "ok"); $("#newEmail").value=""; }
+              catch(e2){ toast(e2.message || String(e2), "err"); }
+            }else{ toast(e.message, "err"); }
+          }
+        });
+        $("#btnChangePassword").addEventListener("click", async ()=>{
+          const user = auth.currentUser; if(!user) return;
+          const newPass = ($("#newPassword").value || "");
+          if(!newPass || newPass.length < 6){ toast("Password must be 6+ chars", "err"); return; }
+          try{ await updatePassword(user, newPass); toast("Password updated", "ok"); $("#newPassword").value = ""; }
+          catch(e){
+            if(String(e.code||"").includes("requires-recent-login")){
+              try{ await promptReauth(user); await updatePassword(user, newPass); toast("Password updated", "ok"); $("#newPassword").value=""; }
+              catch(e2){ toast(e2.message || String(e2), "err"); }
+            }else{ toast(e.message, "err"); }
+          }
+        });
+        $("#btnRequestDeletion").addEventListener("click", async ()=>{
+          const user = auth.currentUser; if(!user) return;
+          try{ await update(ref(db, `users/${user.uid}/profile`), { deletionRequestedAt: now() }); toast("Deletion request stored", "ok"); }
+          catch(e){ toast(e.message, "err"); }
+        });
+        $("#btnDeleteAccount").addEventListener("click", async ()=>{
+          const user = auth.currentUser; if(!user) return;
+          const ok = await slideConfirm({ title:"Delete Account", desc:"This permanently deletes your UpTrace account and cannot be undone." });
+          if(!ok) return;
+          try{
+            try{ await update(ref(db, `users/${user.uid}/profile`), { deletionRequestedAt: now() }); }catch(_){}
+            await deleteUser(user); toast("Account deleted", "ok");
+          }catch(e){
+            if(String(e.code||"").includes("requires-recent-login")){
+              try{ await promptReauth(user); await deleteUser(user); toast("Account deleted", "ok"); }
+              catch(e2){ toast(e2.message || String(e2), "err"); }
+            }else{ toast(e.message, "err"); }
+          }
+        });
+        $("#btnExportData").addEventListener("click", async ()=>{
+          const user = auth.currentUser; if(!user) return;
+          try{
+            const up = await get(ref(db, `userProjects/${user.uid}`));
+            const map = up.val() || {};
+            const projectIds = Object.keys(map);
+            const out = { exportedAt: new Date().toISOString(), uid: user.uid, email: user.email, emailVerified: !!user.emailVerified, profile: {}, projects: {} };
+            try{ out.profile = (await get(ref(db, `users/${user.uid}/profile`))).val() || {}; }catch(_){}
+            for(const pid of projectIds){
+              const p = (await get(ref(db, `projects/${pid}`))).val();
+              if(!p) continue;
+              const role = (await get(ref(db, `projectMembers/${pid}/${user.uid}/role`))).val();
+              const data = { meta: p, yourRole: role || null };
+              data.services = (await get(ref(db, `services/${pid}`))).val() || {};
+              data.announcements = (await get(ref(db, `announcements/${pid}`))).val() || {};
+              data.incidents = (await get(ref(db, `incidents/${pid}`))).val() || {};
+              data.members = (await get(ref(db, `projectMembers/${pid}`))).val() || {};
+              out.projects[pid] = data;
+            }
+            downloadJson(`ezstatus-export-${user.uid}.json`, out);
+            toast("Exported", "ok");
+          }catch(e){ toast(e.message, "err"); }
+        });
+
+        /* ---------------- PROJECTS ---------------- */
+        const projectDropdown = $("#projectDropdown");
+        async function loadProjects(){
+          const snap = await get(ref(db, `userProjects/${currentUid}`));
+          const map = snap.val() || {};
+          const ids = Object.keys(map);
+          const menu = $("#projectMenu");
+          const selected = $("#projectSelected");
+          menu.innerHTML = "";
+          currentProjectId = null;
+          if(ids.length===0){
+            selected.firstChild ? selected.childNodes[0].nodeValue = "No projects (create one)" : selected.textContent = "No projects (create one)";
+            selected.textContent = "No projects (create one)";
+            $("#btnDeleteProject").style.display = "none";
+            return;
+          }
+          for(const id of ids){
+            const pSnap = await get(ref(db, `projects/${id}`));
+            const project = pSnap.val();
+            if(!project) continue;
+            const item = document.createElement("div");
+            item.className = "project-item";
+            item.textContent = project.name || "Unnamed Project";
+            item.addEventListener("click", async ()=>{
+              selected.textContent = project.name || "Unnamed Project";
+              menu.style.display = "none";
+              projectDropdown.classList.remove("open");
+              await selectProject(id);
+            });
+            menu.appendChild(item);
+          }
+          const firstId = ids[0];
+          const firstSnap = await get(ref(db, `projects/${firstId}`));
+          const first = firstSnap.val() || {};
+          selected.textContent = first.name || "Unnamed Project";
+          await selectProject(firstId);
+        }
+
+        $("#projectSelected").addEventListener("click", ()=>{
+          const menu = $("#projectMenu");
+          const open = menu.style.display === "block";
+          menu.style.display = open ? "none" : "block";
+          projectDropdown.classList.toggle("open", !open);
+        });
+        document.addEventListener("click", (e)=>{
+          if(!projectDropdown.contains(e.target)){
+            $("#projectMenu").style.display = "none";
+            projectDropdown.classList.remove("open");
+          }
+        });
+
+        $("#btnDeleteProject").addEventListener("click", async ()=>{
+          try{
+            requireProject();
+            if(currentRole !== "owner"){ toast("Only the project owner can delete this project", "err"); return; }
+            const ok = await slideConfirm({ title:"Delete Project", desc:"This permanently deletes this project and ALL of its data." });
+            if(!ok) return;
+            if(projectUnsub){ projectUnsub(); projectUnsub = null; }
+            if(servicesUnsub){ servicesUnsub(); servicesUnsub = null; }
+            const slugSnap = await get(ref(db, `projects/${currentProjectId}/slug`));
+            const slug = slugSnap.val();
+            await remove(ref(db, `projects/${currentProjectId}`));
+            await remove(ref(db, `services/${currentProjectId}`));
+            await remove(ref(db, `announcements/${currentProjectId}`));
+            await remove(ref(db, `projectMembers/${currentProjectId}`));
+            await remove(ref(db, `userProjects/${currentUid}/${currentProjectId}`));
+            if(slug) await remove(ref(db, `projectSlugs/${slug}`));
+            currentProjectId = null;
+            toast("Project deleted", "ok");
+            await loadProjects();
+          }catch(e){ toast(e.message || String(e), "err"); }
+        });
+
+        async function selectProject(projectId){
+          currentProjectId = projectId;
+          currentRole = await getRole(projectId, currentUid);
+          if(!currentRole){ toast("No access to this project.", "err"); return; }
+          try{
+            const pSnap = await get(ref(db, `projects/${projectId}`));
+            const p = pSnap.val() || {};
+            if($("#projectSelected")) $("#projectSelected").textContent = p.name || "Unnamed Project";
+          }catch(_){}
+          if(projectUnsub){ projectUnsub(); projectUnsub = null; }
+          projectUnsub = onValue(ref(db, `projects/${projectId}`), snap=>{
+            const p = snap.val() || {};
+            $("#projectName").value = p.name || "";
+            $("#projectSlug").value = p.slug || "";
+            if($("#slugPreview")) $("#slugPreview").innerText = p.slug || "…";
+            $("#projectPublic").checked = !!p.public;
+          });
+          mountServicesListener();
+          onValue(ref(db, `announcements/${projectId}`), snap=>{
+            const v = snap.val() || {};
+            $("#announcement").value = v.text || "";
+          }, { onlyOnce: false });
+          $("#btnDeleteProject").style.display = (currentRole === "owner") ? "block" : "none";
+          toast("Project selected", "ok");
+        }
+
+        $("#btnCreateProject").addEventListener("click", async ()=>{
+          const name = prompt("Project name?");
+          if(!name) return;
+          const slug = slugify(name);
+          if(!/^[a-z0-9-]{3,40}$/.test(slug)){ toast("Slug invalid", "err"); return; }
+          try{
+            const projectId = push(ref(db, "projects")).key;
+            await set(ref(db, `projects/${projectId}`), { name, slug, ownerUid: currentUid, public: true, createdAt: now() });
+            await set(ref(db, `projectMembers/${projectId}/${currentUid}`), { role: "owner" });
+            await set(ref(db, `userProjects/${currentUid}/${projectId}`), true);
+            await set(ref(db, `projectSlugs/${slug}`), projectId);
+            toast("Project created", "ok");
+            await loadProjects();
+            if($("#projectSelected")) $("#projectSelected").textContent = name;
+            await selectProject(projectId);
+          }catch(e){ toast(e.message, "err"); }
+        });
+
+        $("#btnSaveProject").addEventListener("click", async ()=>{
+          try{
+            requireProject();
+            if(!["owner","admin"].includes(currentRole)){ toast("Need admin/owner", "err"); return; }
+            const name = $("#projectName").value.trim();
+            let slug = slugify($("#projectSlug").value);
+            const isPublic = $("#projectPublic").checked;
+            if(!name){ toast("Name required", "err"); return; }
+            if(!/^[a-z0-9-]{3,40}$/.test(slug)){ toast("Slug must be 3-40 chars a-z 0-9 -", "err"); return; }
+            const idxSnap = await get(ref(db, `projectSlugs/${slug}`));
+            const existing = idxSnap.val();
+            if(existing && existing !== currentProjectId){ toast("Slug already used", "err"); return; }
+            const oldSnap = await get(ref(db, `projects/${currentProjectId}/slug`));
+            const oldSlug = oldSnap.val();
+            const updates = {};
+            updates[`projects/${currentProjectId}/name`] = name;
+            updates[`projects/${currentProjectId}/slug`] = slug;
+            updates[`projects/${currentProjectId}/public`] = isPublic;
+            if(oldSlug && oldSlug !== slug){ updates[`projectSlugs/${oldSlug}`] = null; }
+            updates[`projectSlugs/${slug}`] = currentProjectId;
+            await update(ref(db), updates);
+            toast("Saved", "ok");
+          }catch(e){ toast(e.message, "err"); }
+        });
+        $("#btnOpenPublic").addEventListener("click", async ()=>{
+          try{
+            requireProject();
+            const snap = await get(ref(db, `projects/${currentProjectId}/slug`));
+            const slug = snap.val();
+            if(!slug){ toast("Set a slug first", "err"); return; }
+            window.open(`status.html?project=${encodeURIComponent(slug)}`, "_blank");
+          }catch(e){ toast(e.message, "err"); }
+        });
+
+        /* ---------------- ANNOUNCEMENT ---------------- */
+        $("#btnSaveAnnouncement").addEventListener("click", async ()=>{
+          try{
+            requireProject();
+            if(!["owner","admin"].includes(currentRole)){ toast("Need admin/owner", "err"); return; }
+            const text = $("#announcement").value;
+            await set(ref(db, `announcements/${currentProjectId}`), { text, updatedAt: now() });
+            toast("Announcement saved", "ok");
+          }catch(e){ toast(e.message, "err"); }
+        });
+
+        /* ---------------- SERVICES ---------------- */
+        function mountServicesListener(){
+          if(servicesUnsub) servicesUnsub();
+          const holder = $("#services");
+          servicesUnsub = onValue(ref(db, `services/${currentProjectId}`), snap=>{
+            const services = snap.val() || {};
+            const entries = Object.entries(services).map(([id,s])=>({id,...s})).sort((a,b)=>(a.order??0)-(b.order??0));
+            holder.innerHTML = "";
+            if(entries.length===0){
+              holder.innerHTML = `<div class="sub-text" style="text-align:center; padding:28px;">No monitors yet. Add one above to start tracking.</div>`;
+              return;
+            }
+            entries.forEach((s, i)=>{ const card = renderServiceCard(s); card.style.animationDelay = (i*0.05)+"s"; holder.appendChild(card); });
+          });
+        }
+
+        const STATUS_COLOR = { operational:"var(--green)", down:"var(--accent-red-bright)", degraded:"var(--amber)", paused:"#888", maintenance:"var(--accent-blue)", unknown:"#888", unlinked:"#666" };
+
+        function statusOptions(selected){
+          const opts = [
+            ["operational","Operational (Online)"],["down","Down (Offline)"],["degraded","Degraded Performance"],
+            ["paused","Paused"],["maintenance","Maintenance"],["unknown","Unknown"],["unlinked","Unlinked"]
+          ];
+          return opts.map(([v,l])=>`<option value="${v}" ${v===selected?'selected':''}>${l}</option>`).join("");
+        }
+
+        function renderServiceCard(s){
+          const wrap = document.createElement("div");
+          wrap.className = "service-item";
+          wrap.innerHTML = `
+            <div class="service-header">
+              <div class="service-name"><span class="svc-dot"></span>${escapeHtml(s.name||"Unnamed")}</div>
+              <button class="btn-danger" data-act="remove">Remove</button>
+            </div>
+            <div class="grid-3">
+              <div><label>Name</label><input data-k="name" type="text" value="${escapeAttr(s.name||"")}"></div>
+              <div><label>Order</label><input data-k="order" type="number" value="${Number(s.order||0)}"></div>
+              <div><label>Target Date</label><input data-k="date" type="date" value="${new Date().toISOString().split("T")[0]}"></div>
+            </div>
+            <div class="grid-3" style="margin-top:14px;">
+              <div><label>Status</label><select data-k="status">${statusOptions("operational")}</select></div>
+              <div><label>Version</label><input data-k="version" type="text" placeholder="2.1.0"></div>
+              <div><label>Notes</label><input data-k="notes" type="text" placeholder="Short notes"></div>
+            </div>
+            <div class="btn-row">
+              <button class="btn-primary" data-act="setDate">Update Status (Single Day)</button>
+              <button class="btn-ghost" data-act="bulk14">Bulk Set (14 Days)</button>
+            </div>
+            <div class="separator" style="margin:18px 0;"></div>
+            <div class="grid-3">
+              <div style="grid-column: span 2;"><label>Target DateTime (Hourly)</label><input data-k="datetime" type="datetime-local" value=""></div>
+              <div style="display:flex; align-items:end;"><button class="btn-primary" data-act="setHour" style="width:100%; height:44px;">Update Status (Single Hour)</button></div>
+            </div>
+            <p class="sub-text" style="margin-top:12px; font-size:12px;">Tip: hourly updates carry forward on the public page until the next change.</p>
+          `;
+          const statusSel = wrap.querySelector('select[data-k="status"]');
+          const dot = wrap.querySelector('.svc-dot');
+          const syncDot = ()=>{ const c = STATUS_COLOR[statusSel.value] || "var(--green)"; dot.style.background = c; dot.style.boxShadow = `0 0 8px ${c}`; };
+          statusSel.addEventListener("change", syncDot);
+
+          const actRemove = wrap.querySelector('[data-act="remove"]');
+          const actSet    = wrap.querySelector('[data-act="setDate"]');
+          const actBulk   = wrap.querySelector('[data-act="bulk14"]');
+          const actHour   = wrap.querySelector('[data-act="setHour"]');
+          const dtInput   = wrap.querySelector('input[data-k="datetime"]');
+          const nameInput = wrap.querySelector('input[data-k="name"]');
+          const orderInput= wrap.querySelector('input[data-k="order"]');
+
+          if(dtInput){
+            const d = new Date(); d.setMinutes(0,0,0);
+            const pad = n=>String(n).padStart(2,'0');
+            dtInput.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
+          }
+
+          actRemove.addEventListener("click", async ()=>{
+            if(!["owner","admin"].includes(currentRole)){ toast("Need admin/owner", "err"); return; }
+            const ok = await slideConfirm({ title:`Remove "${s.name||"service"}"`, desc:"This monitor and its history will be removed." });
+            if(!ok) return;
+            await remove(ref(db, `services/${currentProjectId}/${s.id}`));
+            toast("Removed", "ok");
+          });
+          nameInput.addEventListener("change", async ()=>{
+            if(!["owner","admin"].includes(currentRole)){ toast("Need admin/owner", "err"); return; }
+            await update(ref(db, `services/${currentProjectId}/${s.id}`), { name: nameInput.value.trim(), lastUpdated: now() });
+            toast("Saved", "ok");
+          });
+          orderInput.addEventListener("change", async ()=>{
+            if(!["owner","admin"].includes(currentRole)){ toast("Need admin/owner", "err"); return; }
+            await update(ref(db, `services/${currentProjectId}/${s.id}`), { order: Number(orderInput.value||0), lastUpdated: now() });
+            toast("Saved", "ok");
+          });
+          actSet.addEventListener("click", async ()=>{
+            if(!["owner","admin"].includes(currentRole)){ toast("Need admin/owner", "err"); return; }
+            const date = wrap.querySelector('input[data-k="date"]').value;
+            const status = wrap.querySelector('select[data-k="status"]').value;
+            const version = wrap.querySelector('input[data-k="version"]').value.trim();
+            const notes = wrap.querySelector('input[data-k="notes"]').value.trim();
+            const payload = { status, timestamp: now() };
+            if(version) payload.version = version;
+            if(notes) payload.notes = notes;
+            const updates = {};
+            updates[`services/${currentProjectId}/${s.id}/history/${date}`] = payload;
+            updates[`services/${currentProjectId}/${s.id}/lastUpdated`] = now();
+            await update(ref(db), updates);
+            toast("Saved date", "ok");
+          });
+          actHour?.addEventListener("click", async ()=>{
+            if(!["owner","admin"].includes(currentRole)){ toast("Need admin/owner", "err"); return; }
+            const dt = dtInput?.value;
+            if(!dt){ toast("Pick a date & time", "err"); return; }
+            const status = wrap.querySelector('select[data-k="status"]').value;
+            const version = wrap.querySelector('input[data-k="version"]').value.trim();
+            const notes = wrap.querySelector('input[data-k="notes"]').value.trim();
+            const chosenTs = new Date(dt).getTime();
+            if(!Number.isFinite(chosenTs)){ toast("Invalid date/time", "err"); return; }
+            const hourTs = Math.floor(chosenTs/36e5)*36e5;
+            const payload = { status, timestamp: now(), effectiveAt: hourTs };
+            if(version) payload.version = version;
+            if(notes) payload.notes = notes;
+            const updates = {};
+            updates[`services/${currentProjectId}/${s.id}/historyHours/${hourTs}`] = payload;
+            updates[`services/${currentProjectId}/${s.id}/lastUpdated`] = now();
+            await update(ref(db), updates);
+            toast("Saved hour", "ok");
+          });
+          actBulk.addEventListener("click", async ()=>{
+            if(!["owner","admin"].includes(currentRole)){ toast("Need admin/owner", "err"); return; }
+            const status = wrap.querySelector('select[data-k="status"]').value;
+            const ok = await slideConfirm({ title:"Bulk Update", desc:`Set "${status}" for the last 14 days on this monitor.` });
+            if(!ok) return;
+            const updates = {};
+            for(let i=13;i>=0;i--){
+              const d = new Date(); d.setDate(d.getDate()-i);
+              const ds = d.toISOString().split("T")[0];
+              updates[`services/${currentProjectId}/${s.id}/history/${ds}`] = { status, timestamp: now() };
+            }
+            updates[`services/${currentProjectId}/${s.id}/lastUpdated`] = now();
+            await update(ref(db), updates);
+            toast("Bulk saved", "ok");
+          });
+          return wrap;
+        }
+
+        function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+        function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
+
+        $("#btnAddService").addEventListener("click", async ()=>{
+          try{
+            requireProject();
+            if(!["owner","admin"].includes(currentRole)){ toast("Need admin/owner", "err"); return; }
+            const name = $("#newServiceName").value.trim();
+            const order = Number($("#newServiceOrder").value||0);
+            if(!name){ toast("Service name required", "err"); return; }
+            const serviceId = push(ref(db, `services/${currentProjectId}`)).key;
+            await set(ref(db, `services/${currentProjectId}/${serviceId}`), { name, order, lastUpdated: now(), history: {}, historyHours: {} });
+            $("#newServiceName").value = "";
+            toast("Service added", "ok");
+          }catch(e){ toast(e.message, "err"); }
+        });
+
+        /* ---------------- LEGACY IMPORT ---------------- */
+        $("#btnImportLegacy").addEventListener("click", async ()=>{
+          try{
+            requireProject();
+            if(!["owner","admin"].includes(currentRole)){ toast("Need admin/owner", "err"); return; }
+            const ok = await slideConfirm({ title:"Import Legacy Data", desc:"Import legacy statusApps from DB root into this project." });
+            if(!ok) return;
+            const legacySnap = await get(ref(db, "statusApps"));
+            const legacy = legacySnap.val() || [];
+            if(!Array.isArray(legacy) || legacy.length===0){ toast("No legacy array found", "err"); return; }
+            const updates = {};
+            legacy.forEach((app)=>{
+              const id = push(ref(db, `services/${currentProjectId}`)).key;
+              updates[`services/${currentProjectId}/${id}`] = { name: app.name || "Imported", order: 0, lastUpdated: app.lastUpdated || now(), history: app.history || {} };
+            });
+            await update(ref(db), updates);
+            toast("Imported", "ok");
+          }catch(e){ toast(e.message, "err"); }
+        });
+    </script>
+</body>
+</html>
